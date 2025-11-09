@@ -1,0 +1,94 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgbackup:
+    image: postgres:15-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "mkdir -p /backups && while true; do 
+        pg_dump -U $$DB_USER -h postgres $$DB_NAME > /backups/db_$$(date +%Y%m%d_%H%M%S).sql && 
+        echo \"Backup completed at $$(date)\" &&
+        find /backups -name 'db_*.sql' -mtime +7 -delete;
+        sleep 3600; 
+      done"
+    environment:
+      PGPASSWORD: ${DB_PASS}
+      DB_USER: ${DB_USER}  
+      DB_NAME: ${DB_NAME}  
+    volumes:
+      - ./pgbackup:/backups
+    restart: always
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "8081:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile_dev
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      DB_HOST: postgres
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: ${DB_PORT}
+      TZ: ${TZ}
+      SERVER_PORT: ${SERVER_PORT}
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile_dev
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: "development"
+      BACKEND_API_URL: ${BACKEND_API_URL}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
+  pgadmin_data:
