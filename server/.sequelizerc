@@ -1,0 +1,12 @@
+// .sequelizerc (CommonJS Syntax)
+const path = require('path');
+
+module.exports = {
+  // Specifies the location of your database configuration file
+  config: path.resolve(__dirname, 'src', 'config', 'config.js'),
+  
+  // Folders for generated files
+  'models-path': path.resolve(__dirname, 'src', 'models'),
+  'migrations-path': path.resolve(__dirname, 'src', 'migrations'),
+  'seeders-path': path.resolve(__dirname, 'src', 'seeders'),
+};
